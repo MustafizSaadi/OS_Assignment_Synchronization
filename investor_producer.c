@@ -17,7 +17,7 @@ extern struct bankdata bank_account[NBANK];
 extern long int customer_spending_amount[NCUSTOMER];
 extern long int producer_income[NPRODUCER];
 static struct semaphore *mutex,*TO,*CLA;
-
+//,*CLA
 /*
  * **********************************************************************
  * FUNCTIONS EXECUTED BY CUSTOMER THREADS
@@ -88,6 +88,11 @@ void order_item(void *itm){
 		temp2++;
 	}
 	kprintf("%u req\n",req_serv_item->item_quantity);
+	/*struct item *temp = req_serv_item;
+	//int n=0;
+	kprintf("order type %u\n",temp->order_type);
+	if(temp->next != NULL)
+		kprintf("order_type2 %u\n",(temp->next)->order_type);*/
 	V(TO);
 	V(mutex);
 }
@@ -102,7 +107,9 @@ void order_item(void *itm){
 void consume_item(unsigned long customernum){
     (void) customernum; // avoid warning 
     //panic("You need to write some code!!!!");
-	
+	/*
+		two condition missed, 
+	*/
 	while( req_serv_item-> order_type == SERVICED){
 		customer_spending_amount[customernum] += (req_serv_item->item_quantity) * (req_serv_item->i_price);
 		req_serv_item = req_serv_item->next;
@@ -159,7 +166,7 @@ void *take_order(){
 	//kprintf("I am in take order\n");
   //panic("You need to write some code!!!!");
   P(TO);
-  return req_serv_item; //modify
+  return (void*)(req_serv_item); //modify
 }
 
 
@@ -209,11 +216,11 @@ long int calculate_loan_amount(void* itm){
 	(void)itm;
 	P(CLA);
     //panic("You need to write some code!!!!");
-	struct item *temp = itm;
+	struct item *temp = req_serv_item;
 	int n=0;
-	kprintf("order type %u\n",temp->order_type);
+	kprintf("order type %u\n",temp->item_quantity);
 	if(temp->next != NULL)
-		kprintf("order_type2 %u\n",(temp->next)->order_type);
+		kprintf("order_type2 %u\n",(temp->next)->item_quantity);
 	//kprintf("order_type2 %u\n",(temp->next)->order_type);
 	/*while(temp->next != NULL){
 		if(temp->order_type == REQUEST)
@@ -286,7 +293,7 @@ void initialize(){
 
 	memset(customer_spending_amount,0,NCUSTOMER*sizeof(long int));
 	mutex = sem_create("mutex", 1);
-	TO = sem_create("TO",1);
+	TO = sem_create("TO",0);
 	CLA = sem_create("CLA",1);
 }
 
@@ -299,4 +306,7 @@ void initialize(){
 
 void finish(){
     //panic("You need to write some code!!!!");
+	sem_destroy(mutex);
+	sem_destroy(TO);
+	sem_destroy(CLA);
 }
