@@ -16,7 +16,7 @@
 extern struct bankdata bank_account[NBANK];
 extern long int customer_spending_amount[NCUSTOMER];
 extern long int producer_income[NPRODUCER];
-static struct semaphore *mutex,*TO,*CLA;
+static struct semaphore *mutex,*TO,*CLA,*WFP;
 //,*CLA
 /*
  * **********************************************************************
@@ -41,7 +41,7 @@ void order_item(void *itm){
   //panic("You need to write some code!!!!");
 	int i; 
 	P(mutex);
-
+	//(struct item*) 
 	struct item *head = (struct item*) kmalloc(sizeof(struct item));
 	struct item *temp1 = req_serv_item;
 	struct item *temp2;
@@ -63,7 +63,7 @@ void order_item(void *itm){
 	for (i = 0;i < N_ITEM_TYPE; i++){
 		//memcpy(head,itm,sizeof(struct item));
 		head->item_quantity =(temp2->item_quantity);
-		//kprintf("%u\n",head->item_quantity);
+		//kprintf("%u\n",temp2->item_quantity);
 		//itm += sizeof(unsigned int);
 		head->i_price = ITEM_PRICE;
 		//kprintf("%u\n",head->i_price);
@@ -86,15 +86,19 @@ void order_item(void *itm){
 		head = head->next;
 		//kprintf("%u\n",(head->next)->item_quantity);
 		temp2++;
+		V(TO);
 	}
-	kprintf("%u req\n",req_serv_item->item_quantity);
+	//kprintf("%u req1\n",req_serv_item->item_quantity);
+	//kprintf("%u req1\n",(req_serv_item->next)->item_quantity);
 	/*struct item *temp = req_serv_item;
 	//int n=0;
 	kprintf("order type %u\n",temp->order_type);
 	if(temp->next != NULL)
 		kprintf("order_type2 %u\n",(temp->next)->order_type);*/
-	V(TO);
+	//kprintf("I am in order item\n");
+	//V(TO);
 	V(mutex);
+	//P(WFP);
 }
 
 /**
@@ -126,6 +130,8 @@ void consume_item(unsigned long customernum){
 			cur_head = cur_head->next;
 		
 	}
+
+	
 }
 
 /*
@@ -137,8 +143,18 @@ void consume_item(unsigned long customernum){
  */
 void end_shoping(){
     //panic("You need to write some code!!!!");
-	V(TO);
-	kfree(req_serv_item);
+	//req_serv_item=NULL;
+	//kfree(req_serv_item);
+	struct item *cur_head = req_serv_item;
+	int n=0;
+	while(1){
+		if(cur_head == NULL) break;
+		if(cur_head->order_type != SERVICED)
+			n=1;
+		cur_head = cur_head->next;
+	}
+	if(n==0)
+		V(TO);
 }
 
 
@@ -165,8 +181,21 @@ void end_shoping(){
 void *take_order(){
 	//kprintf("I am in take order\n");
   //panic("You need to write some code!!!!");
-  P(TO);
-  return (void*)(req_serv_item); //modify
+	P(TO) ;
+	struct item *cur_head = req_serv_item;
+	//if( req_serv_item == NULL) P(TO) ;
+	while(1){
+		if(cur_head == NULL) break;
+		if(cur_head->order_type == REQUEST){
+			//customer_spending_amount[customernum] += ((cur_head->next)->item_quantity) * ((cur_head->next)->i_price);
+			return cur_head;
+		}
+		else
+			cur_head = cur_head->next;
+		
+	}
+
+return NULL;
 }
 
 
@@ -181,11 +210,11 @@ void produce_item(void *v){
 	(void)v;
     //panic("You need to write some code!!!!");
 	struct item *head = v;
-	unsigned int i;
-	for(i = 0; i < sizeof(v)/sizeof(struct item*) ; i++){
+	//unsigned int i;
+	//for(i = 0; i < sizeof(v)/sizeof(struct item*) ; i++){
 		head->i_price += ((head->i_price)/100)*PRODUCT_PROFIT + ((head->i_price)/100)*BANK_INTEREST ;
-		head = head->next;
-		}
+		//head = head->next;
+		//}
 }
 
 
@@ -200,12 +229,14 @@ void serve_order(void *v,unsigned long producernumber){
 	(void)producernumber;
     //panic("You need to write some code!!!!");
 	struct item *head = v;
-	unsigned int i;
-	for(i = 0; i < sizeof(v)/sizeof(struct item*) ; i++){
+	//unsigned int i;
+	//for(i = 0; i < sizeof(v)/sizeof(struct item*) ; i++){
 		head->servBy = producernumber ;
 		head->order_type = SERVICED;
-		head = head->next;
-		}
+		//head = head->next;
+		//}
+	//kprintf("ServeOrder\n");
+	//V(WFP);
 }
 
 /**
@@ -214,15 +245,18 @@ void serve_order(void *v,unsigned long producernumber){
  */
 long int calculate_loan_amount(void* itm){
 	(void)itm;
-	P(CLA);
+	//P(CLA);
     //panic("You need to write some code!!!!");
-	struct item *temp = req_serv_item;
-	int n=0;
-	kprintf("order type %u\n",temp->item_quantity);
-	if(temp->next != NULL)
-		kprintf("order_type2 %u\n",(temp->next)->item_quantity);
+	//struct item *temp = req_serv_item;
+	//int n=0;
+	//kprintf("order type %u\n",temp->item_quantity);
+	/*if(temp->next != NULL){
+		temp = temp->next;
+		kprintf("order_type2 %u\n",(temp->item_quantity));
+
+	}
 	//kprintf("order_type2 %u\n",(temp->next)->order_type);
-	/*while(temp->next != NULL){
+	while(temp->next != NULL){
 		if(temp->order_type == REQUEST)
 			n++;
 		temp = temp->next;
@@ -230,8 +264,8 @@ long int calculate_loan_amount(void* itm){
 		//	break;
 	}*/
     //kprintf(" queue size %d\n",n);
-	V(CLA);
-    return ITEM_PRICE*n;
+	//V(CLA);
+    return ITEM_PRICE;
 }
 
 /**
@@ -259,6 +293,7 @@ void loan_reimburse(void * loan,unsigned long producernumber){
 	(void)producernumber;
     //panic("You need to write some code!!!!");
 	long int repay = *(long int *) loan;
+	//kprintf("%ld loan_reimburse\n",repay);
 	long int interest = (repay/100)*BANK_INTEREST;
 	int i;
 	for(i=0; i<NBANK ; i++){
@@ -295,6 +330,7 @@ void initialize(){
 	mutex = sem_create("mutex", 1);
 	TO = sem_create("TO",0);
 	CLA = sem_create("CLA",1);
+	WFP = sem_create("WFP",0);
 }
 
 /*
@@ -309,4 +345,5 @@ void finish(){
 	sem_destroy(mutex);
 	sem_destroy(TO);
 	sem_destroy(CLA);
+	sem_destroy(WFP);
 }
