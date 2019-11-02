@@ -14,10 +14,11 @@
  *  
  */
 
-/*#define PRINT_ON */
+/* #define PRINT_ON */
 
 /* this semaphore is for cleaning up at the end. */
 static struct semaphore *alldone;
+static struct semaphore *print1;
 
 
 /* request and service queue; order type will tell either it is a request or a service */
@@ -61,6 +62,7 @@ void customer(void *unusedpointer, unsigned long customernum)
 		//choose the even item first
 		for (j = 0; j < N_ITEM_TYPE; j++) {
 			orderItem[j].item_quantity=random()%MAX_ITEM_BUY+1;
+			//orderItem[j].item_quantity=10;
 			orderItem[j].requestedBy=customernum;
 			orderItem[j].servBy=-1;
 		}
@@ -80,7 +82,7 @@ void customer(void *unusedpointer, unsigned long customernum)
 		thread_yield();
 
 		i++;
-	} while (i < 1); /* keep going until .... */
+	} while (i < 10); /* keep going until .... */
 
 #ifdef PRINT_ON  
 	kprintf("C %ld end shoping\n", customernum);
@@ -128,9 +130,8 @@ void producer(void *unusedpointer, unsigned long prod)
 			kprintf("S %ld calculating loan amount\n", prod);
 #endif
 			long int amount=calculate_loan_amount(o);
-			kprintf(" loan amount %ld \n",amount);
 #ifdef PRINT_ON
-			kprintf("S %ld request for loan\n", prod);
+			kprintf("S %ld request for loan\n", amount);
 #endif
 			loan_request(&amount,prod);
 #ifdef PRINT_ON
@@ -152,8 +153,9 @@ void producer(void *unusedpointer, unsigned long prod)
 		}
 
 	};
-
+	P(print1);
 	kprintf("S %ld going home after serving %d orders\n", prod, i);
+	V(print1);
 	V(alldone);
 }
 
@@ -179,6 +181,8 @@ int runInvestorProducer(int nargs, char **args)
 	(void) args;
 	/* this semaphore indicates everybody has gone home */
 	alldone = sem_create("alldone", 0);
+	print1 = sem_create("print1",1);
+	
 	if (alldone==NULL) {
 		panic("runInvestorProducer: out of memory\n");
 	}
@@ -226,6 +230,7 @@ int runInvestorProducer(int nargs, char **args)
 	 * you can insert your code as needed to clean up
 	 */
 	finish();
+	sem_destroy(print1);
 	sem_destroy(alldone);
 	//must print the statistics and validate -- need more codes
 	/*for (i =0 ; i < NBANK; i++) {
@@ -266,7 +271,7 @@ void print_statistics(void){
 	kprintf("Verification ....\n");
 	long int t_in=0l;
 	for(i=0;i<NBANK;i++){
-		t_in=bank_account[i].acu_loan_amount*BANK_INTEREST;
+		t_in=bank_account[i].acu_loan_amount*BANK_INTEREST/100;
 		if(t_in!=bank_account[i].interest_amount){
 			kprintf("[%d] calculated interest(t_in) == %ld interest ==  %ld\n", i,t_in,bank_account[i].interest_amount);
 		}
